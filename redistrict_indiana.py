@@ -35,7 +35,7 @@ for county in counties_data:
 # set up a dict for each county/district combo
 prob = LpProblem("Indiana Redistricting", LpMinimize)
 counties = list(county_data.keys())
-districts = range(9)
+districts = range(8)
 x = LpVariable.dicts("county_district", 
                      [(i, j) for i in counties for j in districts], 
                      cat='Binary')
