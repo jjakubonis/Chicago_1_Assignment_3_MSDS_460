@@ -2,6 +2,9 @@ from census import Census
 from us import states
 from pulp import LpProblem, LpMinimize, LpVariable, lpSum, LpStatus
 import os
+import requests
+import pandas as pd
+import io
 from dotenv import load_dotenv
 
 load_dotenv()
