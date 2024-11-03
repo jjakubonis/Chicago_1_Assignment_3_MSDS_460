@@ -82,9 +82,9 @@ for c in counties:
 for d in districts:
     total_pop_d = lpSum(int(county_data['population'][county_data['name'] == c]) * x[c, d] for c in counties)
     
-    # Enforce population to be within 5% of the target
-    prob += total_pop_d >= 0.50 * target_pop
-    prob += total_pop_d <= 1.50 * target_pop
+    # Enforce population to be within 20% of the target
+    prob += total_pop_d >= 0.80 * target_pop
+    prob += total_pop_d <= 1.20 * target_pop
 
 
 
