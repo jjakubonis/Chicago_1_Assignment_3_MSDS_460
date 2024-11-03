@@ -36,6 +36,30 @@ x = LpVariable.dicts("county_district",
                      [(i, j) for i in counties for j in districts], 
                      cat='Binary')
 
+
+
+
+#pull country adjaceny data
+adj_url = "https://www2.census.gov/geo/docs/reference/county_adjacency.txt"
+county_adj_response = requests.get(adj_url)
+county_adj_txt = county_adj_response.text
+county_adj = pd.read_csv(io.StringIO(county_adj_txt), sep = '\t', names = ['county', 'county_num', 'adj_county', 'adj_county_num'])
+county_adj_df = pd.DataFrame(data = county_adj)
+county_adj_df.fillna(method = 'ffill', inplace = True)
+in_county_adj_df = county_adj_df[(county_adj_df['county'].str.contains('IN')) & (county_adj_df['adj_county'].str.contains('IN'))]
+in_county_adj_df = in_county_adj_df.replace('IN', 'Indiana', regex = True)
+
+#create adjacent county dictionary
+in_county_adj = {key : value['adj_county'].tolist() for key, value in in_county_adj_df.groupby('county')}
+for key in in_county_adj:
+    if key in in_county_adj[key]:
+        in_county_adj[key].remove(key)
+
+
+
+
+
+
 # With population, we know what the best case for equal pop distribution is
 # Constraints need to look to the deviation from this target
 deviation = LpVariable.dicts("deviation", districts, lowBound=0)
