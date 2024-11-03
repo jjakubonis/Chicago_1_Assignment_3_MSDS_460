@@ -22,6 +22,7 @@ counties_data = c.acs5.state_county(
     county_fips="*",
     year=2022
 )
+counties_data.remove(counties_data[48])
 
 county_data = {}
 for county in counties_data:
@@ -51,6 +52,8 @@ county_adj_df = pd.DataFrame(data = county_adj)
 county_adj_df.fillna(method = 'ffill', inplace = True)
 in_county_adj_df = county_adj_df[(county_adj_df['county'].str.contains('IN')) & (county_adj_df['adj_county'].str.contains('IN'))]
 in_county_adj_df = in_county_adj_df.replace('IN', 'Indiana', regex = True)
+in_county_adj_df = in_county_adj_df.drop(in_county_adj_df[in_county_adj_df.county_num == 18097.0].index)
+in_county_adj_df = in_county_adj_df.drop(in_county_adj_df[in_county_adj_df.adj_county_num == 18097.0].index)
 
 #create adjacent county dictionary
 in_county_adj = {key : value['adj_county'].tolist() for key, value in in_county_adj_df.groupby('county')}
