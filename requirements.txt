@@ -2,3 +2,5 @@ census
 us
 pulp
 python-dotenv
+geopandas
+plotly

@@ -6,6 +6,9 @@ import requests
 import pandas as pd
 import io
 from dotenv import load_dotenv
+import geopandas as gpd
+import plotly.express as px
+import json
 
 load_dotenv()
 
@@ -104,19 +107,61 @@ for d in districts:
 # cut edges constraint
 for c in counties:
     for d in districts:
+        # adjacency constraint
+        prob += lpSum(x[adj, d] for adj in in_county_adj.get(c, [])) >= x[c, d]
         for adj in in_county_adj.get(c, []):
             prob += x[c, d] - x[adj, d] <= y[c, adj]
             prob += x[adj, d] - x[c, d] <= y[c, adj]
 
-prob.solve(PULP_CBC_CMD(timeLimit=120))
+
+
+prob.solve(PULP_CBC_CMD(timeLimit=600))
 print("Status:", LpStatus[prob.status])
 
 # Output pop results
 district_populations = {d: 0 for d in districts}
+district_white_populations = {d: 0 for d in districts}
 for c in counties:
     for d in districts:
         if x[c, d].varValue == 1:
             district_populations[d] += county_data[c]['population']
+            district_white_populations[d] += county_data[c]['white_population']
 
 for d in districts:
     print(f"District {d + 1} population: {district_populations[d]}")
+    print(f"District {d + 1} white percentage: {district_white_populations[d] / district_populations[d]}")
+
+us_counties = gpd.read_file("https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json")
+indiana_counties = us_counties[us_counties['id'].str.startswith('18')]
+
+# Add Marion County as its own district
+district_assignments = {c: -1 for c in counties}  
+district_assignments["18097"] = 0  
+
+# Assign other counties to districts based on the optimization result
+for c in counties:
+    for d in districts:
+        if x[c, d].varValue == 1:
+            district_assignments[c] = d + 1  
+
+districts_df = pd.DataFrame({
+    'FIPS': list(district_assignments.keys()),
+    'District': list(district_assignments.values())
+})
+
+districts_df['FIPS'] = districts_df['FIPS'].apply(lambda x: str(x).zfill(5))
+indiana_counties['id'] = indiana_counties['id'].apply(lambda x: str(x).zfill(5))
+
+indiana_counties = indiana_counties.merge(districts_df, left_on='id', right_on='FIPS', how='left')
+fig = px.choropleth(
+    indiana_counties,
+    geojson=json.loads(indiana_counties.to_json()),
+    locations='id',
+    color='District',
+    featureidkey='properties.id',
+    labels={'District': 'District'},
+    title='Indiana Redistricting Map',
+)
+
+fig.update_geos(fitbounds="locations", visible=False)
+fig.write_image('Indiana-Districts.png')
