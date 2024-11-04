@@ -22,6 +22,7 @@ counties_data = c.acs5.state_county(
     county_fips="*",
     year=2022
 )
+counties_data.remove(counties_data[48])
 
 county_data = pd.DataFrame.from_dict(counties_data)
 county_data.columns = ['name', 'population', 'state_num', 'county_num']
@@ -36,6 +37,9 @@ county_adj_df = pd.DataFrame(data = county_adj)
 county_adj_df.fillna(method = 'ffill', inplace = True)
 in_county_adj_df = county_adj_df[(county_adj_df['county'].str.contains('IN')) & (county_adj_df['adj_county'].str.contains('IN'))]
 in_county_adj_df = in_county_adj_df.replace(', IN', '', regex = True)
+in_county_adj_df = in_county_adj_df.drop(in_county_adj_df[in_county_adj_df.county_num == 18097.0].index)
+in_county_adj_df = in_county_adj_df.drop(in_county_adj_df[in_county_adj_df.adj_county_num == 18097.0].index)
+
 
 #create adjacent county dictionary
 in_county_adj = {key : value['adj_county'].tolist() for key, value in in_county_adj_df.groupby('county')}
@@ -49,7 +53,7 @@ for key in in_county_adj:
 # set up a dict for each county/district combo
 prob = LpProblem("Indiana Redistricting", LpMinimize)
 counties = county_data['name']
-districts = range(9)
+districts = range(8)
 x = LpVariable.dicts("county_district", 
                      [(i, j) for i in counties for j in districts], 
                      cat='Binary')
@@ -110,4 +114,3 @@ for c in counties:
 
 for d in districts:
     print(f"District {d + 1} population: {district_populations[d]}")
-
