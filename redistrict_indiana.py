@@ -108,7 +108,7 @@ for c in counties:
             prob += x[c, d] - x[adj, d] <= y[c, adj]
             prob += x[adj, d] - x[c, d] <= y[c, adj]
 
-prob.solve(PULP_CBC_CMD(threads=4, gapRel=.02))
+prob.solve(PULP_CBC_CMD(timeLimit=120))
 print("Status:", LpStatus[prob.status])
 
 # Output pop results
