@@ -77,8 +77,8 @@ deviation = LpVariable.dicts("deviation", districts, lowBound=0)
 total_population = sum(county_data[c]['population'] for c in counties)
 target_pop = total_population / len(districts)
 
-# Objective function: Minimize the sum of deviations
-prob += lpSum(deviation[d] for d in districts)
+# Objective function: Minimize the sum of cut edges
+prob += lpSum(y[i, j] for i in counties for j in in_county_adj.get(i, []))
 
 # each county should be in one district only
 for c in counties:
@@ -102,7 +102,7 @@ for d in districts:
     prob += total_pop_d <= 1.10 * target_pop
 
     # Enforce white pop to be no more than 85%
-    prob += white_percentage[d] <= .85
+    prob += white_percentage[d] <= .7
 
 # cut edges constraint
 for c in counties:
