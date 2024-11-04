@@ -1,6 +1,6 @@
 from census import Census
 from us import states
-from pulp import LpProblem, LpMinimize, LpVariable, lpSum, LpStatus
+from pulp import LpProblem, LpMinimize, LpVariable, lpSum, LpStatus, PULP_CBC_CMD
 import os
 import requests
 import pandas as pd
@@ -16,7 +16,8 @@ indiana = states.IN
 counties_data = c.acs5.state_county(
     fields=(
         "NAME",
-        "B01003_001E",  #Total pop
+        "B01003_001E",  # Total pop
+        "B02001_002E",  # White pop
     ),
     state_fips=indiana.fips,
     county_fips="*",
@@ -30,6 +31,7 @@ for county in counties_data:
     county_data[geoid] = {
         'NAME': county['NAME'],
         'population': int(county['B01003_001E']),
+        'white_population': int(county['B02001_002E']),
     }
 
 # set up a dict for each county/district combo
@@ -40,31 +42,31 @@ x = LpVariable.dicts("county_district",
                      [(i, j) for i in counties for j in districts], 
                      cat='Binary')
 
-
-
-
-#pull country adjaceny data
+# pull county adjacency data
 adj_url = "https://www2.census.gov/geo/docs/reference/county_adjacency.txt"
 county_adj_response = requests.get(adj_url)
 county_adj_txt = county_adj_response.text
-county_adj = pd.read_csv(io.StringIO(county_adj_txt), sep = '\t', names = ['county', 'county_num', 'adj_county', 'adj_county_num'])
-county_adj_df = pd.DataFrame(data = county_adj)
-county_adj_df.fillna(method = 'ffill', inplace = True)
+county_adj = pd.read_csv(io.StringIO(county_adj_txt), sep='\t', names=['county', 'county_num', 'adj_county', 'adj_county_num'])
+county_adj_df = pd.DataFrame(data=county_adj)
+county_adj_df.fillna(method='ffill', inplace=True)
 in_county_adj_df = county_adj_df[(county_adj_df['county'].str.contains('IN')) & (county_adj_df['adj_county'].str.contains('IN'))]
-in_county_adj_df = in_county_adj_df.replace('IN', 'Indiana', regex = True)
+in_county_adj_df = in_county_adj_df.replace('IN', 'Indiana', regex=True)
 in_county_adj_df = in_county_adj_df.drop(in_county_adj_df[in_county_adj_df.county_num == 18097.0].index)
 in_county_adj_df = in_county_adj_df.drop(in_county_adj_df[in_county_adj_df.adj_county_num == 18097.0].index)
 
-#create adjacent county dictionary
-in_county_adj = {key : value['adj_county'].tolist() for key, value in in_county_adj_df.groupby('county')}
+# create adjacent county dictionary
+in_county_adj = {
+    str(int(key)): [str(int(adj)) for adj in value['adj_county_num'].tolist()]
+    for key, value in in_county_adj_df.groupby('county_num')
+}
 for key in in_county_adj:
     if key in in_county_adj[key]:
         in_county_adj[key].remove(key)
-
-
-
-
-
+        
+# cut edges variable
+y = LpVariable.dicts("adj", 
+                     [(i, j) for i in counties for j in in_county_adj.get(i, [])], 
+                     cat='Binary')
 
 # With population, we know what the best case for equal pop distribution is
 # Constraints need to look to the deviation from this target
@@ -79,8 +81,16 @@ prob += lpSum(deviation[d] for d in districts)
 for c in counties:
     prob += lpSum(x[c, d] for d in districts) == 1
 
+# Variable for white population percentage
+white_percentage = LpVariable.dicts("white_percentage", districts, lowBound=0, upBound=1)
+
 for d in districts:
     total_pop_d = lpSum(county_data[c]['population'] * x[c, d] for c in counties)
+    total_white_pop_d = lpSum(county_data[c]['white_population'] * x[c, d] for c in counties)
+    
+    # Define white percentage as a constraint
+    prob += white_percentage[d] == total_white_pop_d / total_population
+    
     prob += total_pop_d - target_pop <= deviation[d]
     prob += target_pop - total_pop_d <= deviation[d]
     
@@ -88,7 +98,17 @@ for d in districts:
     prob += total_pop_d >= 0.90 * target_pop
     prob += total_pop_d <= 1.10 * target_pop
 
-prob.solve()
+    # Enforce white pop to be no more than 85%
+    prob += white_percentage[d] <= .85
+
+# cut edges constraint
+for c in counties:
+    for d in districts:
+        for adj in in_county_adj.get(c, []):
+            prob += x[c, d] - x[adj, d] <= y[c, adj]
+            prob += x[adj, d] - x[c, d] <= y[c, adj]
+
+prob.solve(PULP_CBC_CMD(threads=4, gapRel=.02))
 print("Status:", LpStatus[prob.status])
 
 # Output pop results
